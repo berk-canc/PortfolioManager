@@ -587,36 +587,44 @@ namespace PortfolioManager
         {
             StreamWriter writer = new StreamWriter(path);
 
-            writer.WriteLine("Symbol,Name,Last Price,Shares,Buy Price,Cost Basis,Current Value,$ - Gain/Loss,% - Gain/Loss,% - Weight,Date Purchased");
-
-            for (int i = 0; i < m_portfolio.HoldingCount; i++)
+            try
             {
-                Holding holding = m_portfolio.GetHolding(i);
+                writer.WriteLine("Symbol,Name,Last Price,Shares,Buy Price,Cost Basis,Current Value,$ - Gain/Loss,% - Gain/Loss,% - Weight,Date Purchased");
 
-                for (int j = 0; j < holding.PositionCount; j++)
+                for (int i = 0; i < m_portfolio.HoldingCount; i++)
                 {
-                    Position pos = holding.GetPosition(j);
+                    Holding holding = m_portfolio.GetHolding(i);
 
-                    writer.WriteLine(holding.Symbol                                                     + "," +
-                                     holding.Name                                                       + "," +
-                                     holding.CurrentPrice                                               + "," +
-                                     pos.Shares.ToString()                                              + "," +
-                                     pos.BuyPrice                                                       + "," +
-                                     pos.CostBasis                                                      + "," +
-                                     pos.CurrentValue                                                   + "," +
-                                     pos.GainLoss                                                       + "," +
-                                     Math.Round(100 * (pos.GainLoss     / pos.CostBasis)           , 2) + "," +
-                                     Math.Round(100 * (pos.CurrentValue / m_portfolio.CurrentValue), 2) + "," +
-                                     pos.BuyDate);
+                    for (int j = 0; j < holding.PositionCount; j++)
+                    {
+                        Position pos = holding.GetPosition(j);
+
+                        writer.WriteLine(holding.Symbol + "," +
+                                         holding.Name + "," +
+                                         holding.CurrentPrice + "," +
+                                         pos.Shares.ToString() + "," +
+                                         pos.BuyPrice + "," +
+                                         pos.CostBasis + "," +
+                                         pos.CurrentValue + "," +
+                                         pos.GainLoss + "," +
+                                         Math.Round(100 * (pos.GainLoss / pos.CostBasis), 2) + "," +
+                                         Math.Round(100 * (pos.CurrentValue / m_portfolio.CurrentValue), 2) + "," +
+                                         pos.BuyDate);
+                    }//for
                 }//for
-            }//for
 
-            writer.WriteLine("-,-,-,-,Total," + Math.Round(m_portfolio.CostBasis   , 2)                                + "," +
-                                                Math.Round(m_portfolio.CurrentValue, 2)                                + "," +
-                                                Math.Round(m_portfolio.GainLoss    , 2)                                + "," +
-                                                Math.Round(100 * (m_portfolio.GainLoss / m_portfolio.CurrentValue), 2) + "," +
-                                                "100"                                                                  + ",-");
+                writer.WriteLine("-,-,-,-,Total," + Math.Round(m_portfolio.CostBasis, 2) + "," +
+                                                    Math.Round(m_portfolio.CurrentValue, 2) + "," +
+                                                    Math.Round(m_portfolio.GainLoss, 2) + "," +
+                                                    Math.Round(100 * (m_portfolio.GainLoss / m_portfolio.CurrentValue), 2) + "," +
+                                                    "100" + ",-");
 
+            }
+            catch(Exception ex)
+            {
+                writer.Close();
+                throw ex;
+            }
 
             m_modified = false;
             writer.Close();
@@ -637,6 +645,7 @@ namespace PortfolioManager
 
                 if(row.Length != COL_COUNT)
                 {
+                    reader.Close();
                     throw new FormatException("Bad file format.");
                 }
 
@@ -653,10 +662,19 @@ namespace PortfolioManager
                     break;
                 }
 
-                holding = new Holding(row[(int)COL_INDEX.SYMBOL], new Position(null,
-                                                                               Convert.ToDouble(row[(int)COL_INDEX.SHARES]),
-                                                                               Convert.ToDouble(row[(int)COL_INDEX.BUY_PRICE]),
-                                                                               row[(int)COL_INDEX.DATE]));
+                try
+                {
+                    holding = new Holding(row[(int)COL_INDEX.SYMBOL], new Position(null,
+                                                                                   Convert.ToDouble(row[(int)COL_INDEX.SHARES]),
+                                                                                   Convert.ToDouble(row[(int)COL_INDEX.BUY_PRICE]),
+                                                                                   row[(int)COL_INDEX.DATE]));
+                }
+                catch(FormatException ex)
+                {
+                    reader.Close();
+                    throw ex;
+                }
+
                 m_portfolio.AddHolding(holding);
             }//while
 
@@ -756,7 +774,8 @@ namespace PortfolioManager
                 return;
             }
 
-            DialogResult retVal = openFileDialog.ShowDialog();
+            bool         exception = false;
+            DialogResult retVal    = openFileDialog.ShowDialog();
 
             if(retVal == DialogResult.OK)
             {
@@ -766,8 +785,18 @@ namespace PortfolioManager
                 }
                 catch (System.Net.WebException)
                 {
+                    exception = true;
                     Utils.GetInstance().ShowNoInternetDialog();
-                    return;
+                }
+                catch (System.FormatException)
+                {
+                    exception = true;
+                    MessageBox.Show("File format is not correct.", "Portfolio Manager", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                }
+
+                if(exception == true)
+                {
+                    m_portfolio.Clear();
                 }
 
                 UpdateDataGridView();
